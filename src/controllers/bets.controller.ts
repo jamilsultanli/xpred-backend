@@ -130,11 +130,11 @@ export const placeBet = async (
       multiplier = bet.multiplier_at_bet;
     } else {
       // Calculate multiplier from current pools if not available
-      const currency = currency.toLowerCase();
-      const totalPot = currency === 'xp' ? (prediction.total_pot_xp || 0) : (prediction.total_pot_xc || 0);
+      const currencyLower = currency.toLowerCase();
+      const totalPot = currencyLower === 'xp' ? (prediction.total_pot_xp || 0) : (prediction.total_pot_xc || 0);
       const winningPool = choice === 'yes' 
-        ? (currency === 'xp' ? (prediction.yes_pool_xp || 0) : (prediction.yes_pool_xc || 0))
-        : (currency === 'xp' ? (prediction.no_pool_xp || 0) : (prediction.no_pool_xc || 0));
+        ? (currencyLower === 'xp' ? (prediction.yes_pool_xp || 0) : (prediction.yes_pool_xc || 0))
+        : (currencyLower === 'xp' ? (prediction.no_pool_xp || 0) : (prediction.no_pool_xc || 0));
       
       // Multiplier = Total Pot / Winning Pool (after adding this bet)
       const newWinningPool = winningPool + amount;
