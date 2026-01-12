@@ -48,7 +48,14 @@ interface EnvConfig {
 function getEnvVar(key: string, defaultValue?: string): string {
   const value = process.env[key] || defaultValue;
   if (!value) {
-    throw new Error(`Missing required environment variable: ${key}`);
+    // In Vercel, log the error but don't crash immediately
+    const errorMsg = `Missing required environment variable: ${key}`;
+    console.error(`[Config Error] ${errorMsg}`);
+    // Only throw in non-production or if it's a critical variable
+    if (process.env.NODE_ENV !== 'production' || ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'JWT_SECRET'].includes(key)) {
+      throw new Error(errorMsg);
+    }
+    return ''; // Return empty string for non-critical vars in production
   }
   return value;
 }
