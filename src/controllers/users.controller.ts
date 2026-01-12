@@ -700,6 +700,12 @@ export const completeOnboarding = async (
 
     // Follow users if provided
     if (follow_user_ids && Array.isArray(follow_user_ids) && follow_user_ids.length > 0) {
+      // #region agent log
+      const fs = require('fs');
+      const logPath = 'c:\\Users\\camil.sultanli\\Downloads\\Xpred-ai\\.cursor\\debug.log';
+      const logEntry = JSON.stringify({location:'users.controller.ts:702',message:'Following users',data:{followUserIds:follow_user_ids,count:follow_user_ids.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n';
+      fs.appendFileSync(logPath, logEntry);
+      // #endregion
       const followPromises = follow_user_ids.map((targetUserId: string) => {
         return supabaseAdmin
           .from('follows')
@@ -712,14 +718,39 @@ export const completeOnboarding = async (
           });
       });
 
-      await Promise.all(followPromises);
+      try {
+        await Promise.all(followPromises);
+        // #region agent log
+        const logEntry2 = JSON.stringify({location:'users.controller.ts:715',message:'Follow operations completed',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n';
+        fs.appendFileSync(logPath, logEntry2);
+        // #endregion
+      } catch (followError: any) {
+        // #region agent log
+        const logEntry3 = JSON.stringify({location:'users.controller.ts:717',message:'Follow operations error',data:{error:followError?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})+'\n';
+        fs.appendFileSync(logPath, logEntry3);
+        // #endregion
+        console.error('Error following users:', followError);
+        // Don't throw - allow onboarding to complete even if follows fail
+      }
     }
 
+    // #region agent log
+    const fs = require('fs');
+    const logPath = 'c:\\Users\\camil.sultanli\\Downloads\\Xpred-ai\\.cursor\\debug.log';
+    const logEntry4 = JSON.stringify({location:'users.controller.ts:721',message:'Sending success response',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})+'\n';
+    fs.appendFileSync(logPath, logEntry4);
+    // #endregion
     return res.json({
       success: true,
       message: 'Onboarding completed successfully',
     });
-  } catch (error) {
+  } catch (error: any) {
+    // #region agent log
+    const fs = require('fs');
+    const logPath = 'c:\\Users\\camil.sultanli\\Downloads\\Xpred-ai\\.cursor\\debug.log';
+    const logEntry = JSON.stringify({location:'users.controller.ts:723',message:'completeOnboarding error caught',data:{error:error?.message,errorStack:error?.stack?.substring(0,200)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})+'\n';
+    fs.appendFileSync(logPath, logEntry);
+    // #endregion
     return next(error);
   }
 };
