@@ -122,7 +122,24 @@ export const placeBet = async (
       .single();
 
     // Get multiplier from RPC result or bet record
-    const multiplier = betResult.multiplier || bet?.multiplier_at_bet || 0;
+    // RPC function returns multiplier in the result
+    let multiplier = 0;
+    if (betResult.multiplier) {
+      multiplier = betResult.multiplier;
+    } else if (bet?.multiplier_at_bet) {
+      multiplier = bet.multiplier_at_bet;
+    } else {
+      // Calculate multiplier from current pools if not available
+      const currency = currency.toLowerCase();
+      const totalPot = currency === 'xp' ? (prediction.total_pot_xp || 0) : (prediction.total_pot_xc || 0);
+      const winningPool = choice === 'yes' 
+        ? (currency === 'xp' ? (prediction.yes_pool_xp || 0) : (prediction.yes_pool_xc || 0))
+        : (currency === 'xp' ? (prediction.no_pool_xp || 0) : (prediction.no_pool_xc || 0));
+      
+      // Multiplier = Total Pot / Winning Pool (after adding this bet)
+      const newWinningPool = winningPool + amount;
+      multiplier = newWinningPool > 0 ? (totalPot + amount) / newWinningPool : 1.5;
+    }
     
     // Calculate payout using multiplier
     const potentialPayout = amount * multiplier;

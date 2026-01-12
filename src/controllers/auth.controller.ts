@@ -182,6 +182,29 @@ export const login = async (
       throw new UnauthorizedError('Account is banned');
     }
 
+    // Check if email was just verified (first login after email confirmation)
+    // Check if email_confirmed_at exists and we haven't sent notification yet
+    const emailConfirmedAt = authData.user.email_confirmed_at;
+    const lastEmailVerificationNotification = await supabaseAdmin
+      .from('notifications')
+      .select('created_at')
+      .eq('user_id', authData.user.id)
+      .eq('type', 'email_verified')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .single();
+
+    // If email is confirmed and we haven't sent notification, or notification is older than email confirmation
+    if (emailConfirmedAt && (!lastEmailVerificationNotification.data || 
+        new Date(lastEmailVerificationNotification.data.created_at) < new Date(emailConfirmedAt))) {
+      // Create notification for email verification
+      await supabaseAdmin.from('notifications').insert({
+        user_id: authData.user.id,
+        type: 'email_verified',
+        message: 'Your email has been verified! Welcome to Xpred.',
+      });
+    }
+
     res.json({
       success: true,
       user: {
