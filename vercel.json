@@ -6,11 +6,7 @@
   "framework": null,
   "routes": [
     {
-      "src": "/api/v1/(.*)",
-      "dest": "/api/index.ts"
-    },
-    {
-      "src": "/health",
+      "src": "/api/(.*)",
       "dest": "/api/index.ts"
     },
     {
