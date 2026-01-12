@@ -22,12 +22,15 @@ const updateProfileSchema = z.object({
 // Routes
 router.get('/me', authenticateUser, usersController.getCurrentUser);
 router.get('/by-id/:id', usersController.getUserById);
-router.get('/:username', usersController.getUserByUsername);
+router.get('/check-username/:username', usersController.checkUsernameAvailability);
+router.get('/suggested', authenticateUser, usersController.getSuggestedUsers);
+router.post('/complete-onboarding', authenticateUser, usersController.completeOnboarding);
 router.put('/me', authenticateUser, validate(updateProfileSchema), usersController.updateProfile);
 router.get('/:username/predictions', usersController.getUserPredictions);
 router.get('/:username/followers', usersController.getUserFollowers);
 router.get('/:username/following', usersController.getUserFollowing);
 router.get('/me/stats', authenticateUser, usersController.getUserStats);
+router.get('/:username', usersController.getUserByUsername);
 
 export default router;
 

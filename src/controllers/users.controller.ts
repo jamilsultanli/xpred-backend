@@ -59,10 +59,11 @@ export const getUserByUsername = async (
   try {
     const { username } = req.params;
 
+    // Username lookup should be case-insensitive
     const { data: profile, error } = await supabaseAdmin
       .from('profiles')
       .select('*')
-      .eq('username', username)
+      .ilike('username', username) // Case-insensitive search
       .single();
 
     if (error || !profile) {
@@ -502,5 +503,223 @@ export const getUserStats = async (
     });
   } catch (error) {
     next(error);
+  }
+};
+
+export const checkUsernameAvailability = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    const { username } = req.params;
+
+    if (!username || username.length < 3) {
+      return res.json({
+        success: true,
+        available: false,
+        message: 'Username must be at least 3 characters',
+      });
+    }
+
+    if (username.length > 15) {
+      return res.json({
+        success: true,
+        available: false,
+        message: 'Username must be less than 15 characters',
+      });
+    }
+
+    // Check if username matches valid pattern (letters, numbers, underscores only)
+    if (!/^[a-z0-9_]+$/.test(username.toLowerCase())) {
+      return res.json({
+        success: true,
+        available: false,
+        message: 'Username can only contain letters, numbers, and underscores',
+      });
+    }
+
+    // Check if username is already taken
+    const { data: existingUser } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('username', username.toLowerCase())
+      .maybeSingle();
+
+    if (existingUser) {
+      return res.json({
+        success: true,
+        available: false,
+        message: 'Username is already taken',
+      });
+    }
+
+    return res.json({
+      success: true,
+      available: true,
+      message: 'Username is available',
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getSuggestedUsers = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!req.user) {
+      throw new ForbiddenError('User not authenticated');
+    }
+
+    const userId = req.user.id;
+    const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
+    const interests = req.query.interests ? (req.query.interests as string).split(',') : [];
+
+    // Get users with most followers, excluding current user
+    // Order by follower count (we'll need to calculate this)
+    let query = supabaseAdmin
+      .from('profiles')
+      .select('id, username, full_name, bio, avatar_url, created_at')
+      .neq('id', userId)
+      .not('username', 'is', null)
+      .limit(limit);
+
+    const { data: users, error } = await query;
+
+    if (error) {
+      throw error;
+    }
+
+    // Get follower counts for each user
+    const usersWithStats = await Promise.all(
+      (users || []).map(async (user: any) => {
+        const { count: followerCount } = await supabaseAdmin
+          .from('follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('following_id', user.id);
+
+        const { count: predictionCount } = await supabaseAdmin
+          .from('predictions')
+          .select('*', { count: 'exact', head: true })
+          .eq('creator_id', user.id);
+
+        // Check if current user is already following this user
+        const { data: isFollowing } = await supabaseAdmin
+          .from('follows')
+          .select('id')
+          .eq('follower_id', userId)
+          .eq('following_id', user.id)
+          .maybeSingle();
+
+        return {
+          id: user.id,
+          username: user.username,
+          displayName: user.full_name || user.username,
+          bio: user.bio || 'No bio yet',
+          avatar_url: user.avatar_url,
+          followers: followerCount || 0,
+          predictions: predictionCount || 0,
+          isFollowing: !!isFollowing,
+        };
+      })
+    );
+
+    // Sort by follower count (descending)
+    usersWithStats.sort((a, b) => b.followers - a.followers);
+
+    return res.json({
+      success: true,
+      users: usersWithStats,
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const completeOnboarding = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!req.user) {
+      throw new ForbiddenError('User not authenticated');
+    }
+
+    const userId = req.user.id;
+    const { username, bio, avatar_url, interests, follow_user_ids } = req.body;
+
+    const updateData: any = {};
+
+    // Update username if provided
+    if (username) {
+      // Check if username is already taken
+      const { data: existingUser } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('username', username.toLowerCase())
+        .neq('id', userId)
+        .maybeSingle();
+
+      if (existingUser) {
+        throw new ConflictError('Username already taken');
+      }
+
+      updateData.username = username.toLowerCase();
+    }
+
+    // Update bio if provided
+    if (bio !== undefined) {
+      updateData.bio = bio;
+    }
+
+    // Update avatar if provided
+    if (avatar_url !== undefined) {
+      updateData.avatar_url = avatar_url;
+    }
+
+    // Update interests (if you have an interests column in profiles table)
+    // For now, we'll skip this as it might not exist in the schema
+
+    // Update profile
+    if (Object.keys(updateData).length > 0) {
+      const { data: updatedProfile, error: updateError } = await supabaseAdmin
+        .from('profiles')
+        .update(updateData)
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (updateError) {
+        throw updateError;
+      }
+    }
+
+    // Follow users if provided
+    if (follow_user_ids && Array.isArray(follow_user_ids) && follow_user_ids.length > 0) {
+      const followPromises = follow_user_ids.map((targetUserId: string) => {
+        return supabaseAdmin
+          .from('follows')
+          .upsert({
+            follower_id: userId,
+            following_id: targetUserId,
+            created_at: new Date().toISOString(),
+          }, {
+            onConflict: 'follower_id,following_id',
+          });
+      });
+
+      await Promise.all(followPromises);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Onboarding completed successfully',
+    });
+  } catch (error) {
+    return next(error);
   }
 };
