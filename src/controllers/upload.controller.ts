@@ -146,6 +146,10 @@ export const uploadVideo = async (
 
         if (uploadError) {
           console.error('Supabase storage upload error:', uploadError);
+          // Check if bucket doesn't exist
+          if (uploadError.message?.includes('Bucket not found') || uploadError.message?.includes('not found')) {
+            throw new ValidationError('Storage bucket not configured. Please create the "predictions" bucket in Supabase Storage. See migrations/create_storage_buckets.sql');
+          }
           throw new ValidationError(`Failed to upload video: ${uploadError.message}`);
         }
 
