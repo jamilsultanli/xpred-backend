@@ -922,20 +922,16 @@ export const getPendingResolutions = async (
       .order('deadline', { ascending: false });
 
     if (error) {
+      console.error('Failed to fetch pending resolutions:', error);
       throw new ValidationError('Failed to fetch pending resolutions');
     }
 
-    // Count pending (not submitted) and submitted (under review)
-    const pending = (predictions || []).filter(p => p.resolution_status === 'pending');
-    const underReview = (predictions || []).filter(p => p.resolution_status === 'submitted');
-
+    // Return all expired predictions that need resolution
     res.json({
       success: true,
       predictions: predictions || [],
       counts: {
         total: (predictions || []).length,
-        pending: pending.length,
-        underReview: underReview.length,
       },
     });
   } catch (error) {
