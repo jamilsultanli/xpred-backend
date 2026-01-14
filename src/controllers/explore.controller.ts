@@ -202,16 +202,17 @@ export const getTrending = async (
       startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     }
 
-    // Get predictions with bet activity in period
+    // Get predictions with XC bet activity in period (XC-based trending)
     const { data: bets } = await supabaseAdmin
       .from('bets')
-      .select('prediction_id, amount')
+      .select('prediction_id, amount, currency')
       .gte('created_at', startDate.toISOString());
 
     // Calculate trending score (bet count + total volume)
     const predictionScores: Record<string, { bets: number; volume: number; score: number }> = {};
 
     (bets || []).forEach((bet: any) => {
+      if (bet.currency !== 'XC') return;
       if (!predictionScores[bet.prediction_id]) {
         predictionScores[bet.prediction_id] = { bets: 0, volume: 0, score: 0 };
       }
@@ -232,9 +233,22 @@ export const getTrending = async (
       .map(([id]) => id);
 
     if (topPredictionIds.length === 0) {
+      // Fallback: XC pot size for unresolved predictions
+      const { data: fallback } = await supabaseAdmin
+        .from('predictions')
+        .select(
+          `
+        *,
+        creator:profiles!creator_id(id, username, avatar_url, is_verified)
+      `
+        )
+        .eq('is_resolved', false)
+        .order('total_pot_xc', { ascending: false })
+        .limit(limit);
+
       res.json({
         success: true,
-        predictions: [],
+        predictions: fallback || [],
       });
       return;
     }

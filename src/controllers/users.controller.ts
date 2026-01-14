@@ -623,8 +623,15 @@ export const getSuggestedUsers = async (
     }
 
     const userId = req.user.id;
-    const limit = Math.min(parseInt(req.query.limit as string) || 10, 20);
+    const limit = Math.min(parseInt(req.query.limit as string) || 4, 20);
     const interests = req.query.interests ? (req.query.interests as string).split(',') : [];
+
+    // Get ids the user already follows (exclude them)
+    const { data: myFollows } = await supabaseAdmin
+      .from('follows')
+      .select('following_id')
+      .eq('follower_id', userId);
+    const followingIds = new Set((myFollows || []).map((f: any) => f.following_id));
 
     // Get users with most followers, excluding current user
     // Order by follower count (we'll need to calculate this)
@@ -633,7 +640,15 @@ export const getSuggestedUsers = async (
       .select('id, username, full_name, bio, avatar_url, created_at')
       .neq('id', userId)
       .not('username', 'is', null)
-      .limit(limit);
+      .limit(Math.max(limit * 8, 30));
+
+    // Optional interests-based soft filter (if interests provided)
+    if (interests.length > 0) {
+      // profiles.interests is expected to be a text[]; if not present this is a no-op on many setups
+      // We keep it optional and do not fail if schema doesn't support it.
+      // @ts-ignore
+      query = query.overlaps('interests', interests);
+    }
 
     const { data: users, error } = await query;
 
@@ -654,14 +669,6 @@ export const getSuggestedUsers = async (
           .select('*', { count: 'exact', head: true })
           .eq('creator_id', user.id);
 
-        // Check if current user is already following this user
-        const { data: isFollowing } = await supabaseAdmin
-          .from('follows')
-          .select('id')
-          .eq('follower_id', userId)
-          .eq('following_id', user.id)
-          .maybeSingle();
-
         return {
           id: user.id,
           username: user.username,
@@ -670,7 +677,7 @@ export const getSuggestedUsers = async (
           avatar_url: user.avatar_url,
           followers: followerCount || 0,
           predictions: predictionCount || 0,
-          isFollowing: !!isFollowing,
+          isFollowing: followingIds.has(user.id),
         };
       })
     );
@@ -680,7 +687,8 @@ export const getSuggestedUsers = async (
 
     return res.json({
       success: true,
-      users: usersWithStats,
+      // Exclude already-followed users and return 3-4 meaningful suggestions
+      users: usersWithStats.filter((u) => !u.isFollowing).slice(0, limit),
     });
   } catch (error) {
     return next(error);
