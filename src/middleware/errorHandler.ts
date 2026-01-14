@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../utils/errors';
 import { config } from '../config/env';
+import crypto from 'crypto';
 
 export const errorHandler = (
   err: Error | AppError,
@@ -8,8 +9,17 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ) => {
+  const errorId = (() => {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      return `err_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    }
+  })();
+
   // Log error
   console.error('Error:', {
+    errorId,
     message: err.message,
     stack: config.NODE_ENV === 'development' ? err.stack : undefined,
     path: req.path,
@@ -42,6 +52,7 @@ export const errorHandler = (
     success: false,
     error: {
       code: 'INTERNAL_ERROR',
+      errorId,
       message: config.NODE_ENV === 'production' 
         ? 'Internal server error' 
         : err.message,
