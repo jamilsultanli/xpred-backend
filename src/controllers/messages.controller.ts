@@ -366,6 +366,62 @@ export const updateTypingStatus = async (
   }
 };
 
+// Get typing status for a conversation (for polling-based UI)
+export const getTypingStatus = async (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  try {
+    if (!req.user) {
+      throw new ForbiddenError('User not authenticated');
+    }
+
+    const { conversationId } = req.params;
+
+    // Verify user is participant in conversation
+    const { data: conversation } = await supabaseAdmin
+      .from('conversations')
+      .select('participant1_id, participant2_id')
+      .eq('id', conversationId)
+      .single();
+
+    if (!conversation) {
+      throw new NotFoundError('Conversation');
+    }
+
+    if (
+      conversation.participant1_id !== req.user.id &&
+      conversation.participant2_id !== req.user.id
+    ) {
+      throw new ForbiddenError('Not a participant in this conversation');
+    }
+
+    // Consider "typing" only if updated in last 5 seconds
+    const fiveSecondsAgo = new Date(Date.now() - 5000).toISOString();
+
+    const { data: typingRows, error } = await supabaseAdmin
+      .from('typing_status')
+      .select('user_id, is_typing, updated_at, user:profiles!user_id(id, username, full_name, avatar_url)')
+      .eq('conversation_id', conversationId)
+      .neq('user_id', req.user.id)
+      .eq('is_typing', true)
+      .gt('updated_at', fiveSecondsAgo);
+
+    if (error) {
+      throw new ValidationError('Failed to fetch typing status');
+    }
+
+    res.json({
+      success: true,
+      isTyping: (typingRows || []).length > 0,
+      users: (typingRows || []).map((r: any) => r.user),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Get unread message count
 export const getUnreadCount = async (
   req: Request,

@@ -30,6 +30,7 @@ const typingStatusSchema = z.object({
 router.get('/', authenticateUser, messagesController.getConversations);
 router.get('/unread-count', authenticateUser, messagesController.getUnreadCount);
 router.get('/:conversationId', authenticateUser, messagesController.getMessages);
+router.get('/:conversationId/typing', authenticateUser, messagesController.getTypingStatus);
 router.post('/', authenticateUser, validate(sendMessageSchema), messagesController.sendMessage);
 router.delete('/:messageId', authenticateUser, messagesController.deleteMessage);
 router.post('/:messageId/react', authenticateUser, validate(reactToMessageSchema), messagesController.reactToMessage);
