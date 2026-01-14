@@ -70,6 +70,23 @@ export const getUserByUsername = async (
       throw new NotFoundError('User');
     }
 
+    // Compute public counts (followers/following/predictions)
+    const [{ count: followersCount }, { count: followingCount }, { count: predictionsCount }] =
+      await Promise.all([
+        supabaseAdmin
+          .from('follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('following_id', profile.id),
+        supabaseAdmin
+          .from('follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('follower_id', profile.id),
+        supabaseAdmin
+          .from('predictions')
+          .select('*', { count: 'exact', head: true })
+          .eq('creator_id', profile.id),
+      ]);
+
     // Auto-assign title if user doesn't have one
     if (!profile.title) {
       await assignAutoTitles(profile.id);
@@ -83,14 +100,24 @@ export const getUserByUsername = async (
       if (updatedProfile) {
         return res.json({
           success: true,
-          user: updatedProfile,
+          user: {
+            ...updatedProfile,
+            followers_count: followersCount || 0,
+            following_count: followingCount || 0,
+            predictions_count: predictionsCount || 0,
+          },
         });
       }
     }
 
     res.json({
       success: true,
-      user: profile,
+      user: {
+        ...profile,
+        followers_count: followersCount || 0,
+        following_count: followingCount || 0,
+        predictions_count: predictionsCount || 0,
+      },
     });
   } catch (error) {
     next(error);
@@ -115,9 +142,30 @@ export const getUserById = async (
       throw new NotFoundError('User');
     }
 
+    const [{ count: followersCount }, { count: followingCount }, { count: predictionsCount }] =
+      await Promise.all([
+        supabaseAdmin
+          .from('follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('following_id', profile.id),
+        supabaseAdmin
+          .from('follows')
+          .select('*', { count: 'exact', head: true })
+          .eq('follower_id', profile.id),
+        supabaseAdmin
+          .from('predictions')
+          .select('*', { count: 'exact', head: true })
+          .eq('creator_id', profile.id),
+      ]);
+
     res.json({
       success: true,
-      user: profile,
+      user: {
+        ...profile,
+        followers_count: followersCount || 0,
+        following_count: followingCount || 0,
+        predictions_count: predictionsCount || 0,
+      },
     });
   } catch (error) {
     next(error);
@@ -206,7 +254,7 @@ export const getUserPredictions = async (
     const { data: user, error: userError } = await supabaseAdmin
       .from('profiles')
       .select('id')
-      .eq('username', username)
+      .ilike('username', username)
       .single();
 
     if (userError || !user) {
@@ -325,7 +373,7 @@ export const getUserFollowers = async (
     const { data: user, error: userError } = await supabaseAdmin
       .from('profiles')
       .select('id')
-      .eq('username', username)
+      .ilike('username', username)
       .single();
 
     if (userError || !user) {
@@ -373,7 +421,7 @@ export const getUserFollowing = async (
     const { data: user, error: userError } = await supabaseAdmin
       .from('profiles')
       .select('id')
-      .eq('username', username)
+      .ilike('username', username)
       .single();
 
     if (userError || !user) {
